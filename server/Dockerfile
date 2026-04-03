@@ -53,6 +53,8 @@ FROM ${BASE_IMAGE}
 WORKDIR /app
 
 COPY --from=builder /app/env/.venv /app/.venv
+COPY --from=builder /app/env/.venv /app/env/.venv
+COPY --from=builder /root/.local/share/uv /root/.local/share/uv
 
 COPY --from=builder /app/env /app/env
 
@@ -63,6 +65,6 @@ ENV PYTHONPATH="/app/env:$PYTHONPATH"
 ENV PYTHONUNBUFFERED=1
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')" || exit 1
 
-CMD ["uvicorn", "qed_math_env.server.app:app", "--host", "0.0.0.0", "--port", "8000", "--ws-ping-interval", "120", "--ws-ping-timeout", "600"]
+CMD ["uvicorn", "server.app:app", "--host", "0.0.0.0", "--port", "8000", "--ws-ping-interval", "120", "--ws-ping-timeout", "600"]

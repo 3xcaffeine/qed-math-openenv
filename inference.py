@@ -14,11 +14,45 @@ import asyncio
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any, Optional, cast
 
 from openai import OpenAI
 
 from client import QEDMathEnv
+
+
+def _load_local_dotenv() -> None:
+    """Load .env values if present without overriding exported env vars."""
+    candidates = [Path.cwd() / ".env", Path(__file__).resolve().parent / ".env"]
+    seen: set[Path] = set()
+    for env_path in candidates:
+        resolved = env_path.resolve()
+        if resolved in seen or not resolved.is_file():
+            continue
+        seen.add(resolved)
+
+        for raw_line in resolved.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export ") :].strip()
+
+            key, sep, value = line.partition("=")
+            if not sep:
+                continue
+
+            key = key.strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+                value = value[1:-1]
+
+            if key:
+                os.environ.setdefault(key, value)
+
+
+_load_local_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-oss-120b:novita")
@@ -165,8 +199,6 @@ async def run_episode(
             tool_args = {"proof": tool_args.get("proof", str(tool_args))}
 
         call_kwargs = dict(tool_args)
-        if tool_name == "submit_proof":
-            call_kwargs.setdefault("output_length_tokens", total_output_tokens)
 
         step_result = await env.call_tool(tool_name, **call_kwargs)
 
