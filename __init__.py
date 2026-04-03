@@ -1,7 +1,7 @@
 """QED Math Environment."""
 
-from .client import QEDMathEnv
-from .models import (
+from client import QEDMathEnv
+from models import (
     GetGradingGuidelines,
     GetProblem,
     ProblemObservation,

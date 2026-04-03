@@ -22,36 +22,22 @@ from typing import Any, Optional
 import math_verify
 
 from fastmcp import FastMCP
+from openenv.core.env_server.mcp_environment import (
+    MCPEnvironment,
+)
+from openenv.core.env_server.mcp_types import (
+    CallToolAction,
+    CallToolObservation,
+    ListToolsAction,
+    ListToolsObservation,
+    Tool,
+    ToolError,
+    ToolErrorType,
+)
+from openenv.core.env_server.types import Action, Observation, State
 
-try:
-    from openenv.core.env_server.mcp_environment import (
-        MCPEnvironment,
-        MCP_TOOL_CALL_TIMEOUT,
-    )
-    from openenv.core.env_server.mcp_types import (
-        CallToolAction,
-        CallToolObservation,
-        ListToolsAction,
-        ListToolsObservation,
-        Tool,
-        ToolError,
-        ToolErrorType,
-    )
-    from openenv.core.env_server.types import Action, Observation, State
-except ImportError:
-    from openenv.core.env_server.mcp_environment import (
-        MCPEnvironment,
-    )
-    from openenv.core.env_server.mcp_types import (
-        CallToolAction,
-        CallToolObservation,
-    )
-    from openenv.core.env_server.types import Action, Observation, State
 
-try:
-    from .models import ProblemObservation, ProofSubmissionObservation
-except ImportError:
-    from models import ProblemObservation, ProofSubmissionObservation
+from models import ProblemObservation, ProofSubmissionObservation
 
 from .mcp_server import register_mcp_tools
 from .rubric import GradingResult, MathProofRubric, length_penalty, parse_schema
@@ -583,26 +569,10 @@ class QEDMathEnvironment(MCPEnvironment):
     ) -> Any:
         self._state.step_count += 1
 
-        try:
-            from openenv.core.env_server.mcp_types import (
-                CallToolAction,
-                CallToolObservation,
-                ListToolsAction,
-                ListToolsObservation,
-                Tool,
-                ToolError,
-                ToolErrorType,
-            )
-        except ImportError:
-            from openenv_core.env_server.mcp_types import (
-                CallToolAction,
-                CallToolObservation,
-                ListToolsAction,
-                ListToolsObservation,
-                Tool,
-                ToolError,
-                ToolErrorType,
-            )
+        from openenv.core.env_server.mcp_types import (
+            CallToolAction,
+            CallToolObservation,
+        )
 
         MCP_TIMEOUT = 600.0
 

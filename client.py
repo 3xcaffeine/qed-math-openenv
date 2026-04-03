@@ -19,7 +19,7 @@ from openenv.core.client_types import StepResult
 from openenv.core.env_server.types import Observation, State
 from openenv.core.mcp_client import MCPToolClient
 
-from .models import ProblemObservation, ProofSubmissionObservation
+from models import ProblemObservation, ProofSubmissionObservation
 
 
 class QEDMathEnv(MCPToolClient):

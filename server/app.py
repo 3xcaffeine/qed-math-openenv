@@ -12,15 +12,9 @@ Usage:
     uv run --project . server
 """
 
-try:
-    from openenv.core.env_server import create_app
-    from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
-    from .qed_math_environment import QEDMathEnvironment
-except ImportError:
-    from openenv.core.env_server import create_app
-    from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
-    from server.qed_math_environment import QEDMathEnvironment
-
+from openenv.core.env_server import create_app
+from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
+from server.qed_math_environment import QEDMathEnvironment
 
 app = create_app(
     QEDMathEnvironment,
