@@ -1,10 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
-
 """
 MCP tool definitions for the QED Math Environment.
 
@@ -16,7 +9,6 @@ QEDMathEnvironment.__init__:
 - submit_proof(proof): Grade proof via MathProofRubric and return score/reward.
 - get_grading_guidelines(): Return the rubric for the current problem.
 """
-
 
 from __future__ import annotations
 
@@ -35,7 +27,6 @@ def register_mcp_tools(mcp: FastMCP, env: "QEDMathEnvironment") -> None:
     def get_problem() -> dict:
         """Get the current problem statement and associated metadata."""
         return env.get_problem_payload()
-
 
     @mcp.tool
     async def submit_proof(proof: str) -> dict:

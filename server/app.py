@@ -1,9 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
 """
 FastAPI application for the QED Math Environment.
 
@@ -45,6 +39,7 @@ async def health() -> dict[str, str]:
 def main():
     """Entry point for direct execution via uv run or python -m."""
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 

@@ -1,9 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
 """Tests for the QED Math Environment.
 
 Unit tests (no network/Docker required):
@@ -614,7 +608,9 @@ class TestGradeAnswerSubmission:
     async def test_missing_boxed_gives_zero(self):
         env = _make_env()
         try:
-            result = await env._grade_answer_submission("The answer is 4.", r"\boxed{4}")
+            result = await env._grade_answer_submission(
+                "The answer is 4.", r"\boxed{4}"
+            )
             assert result.score == 0
             assert result.reward == pytest.approx(0.0)
         finally:
@@ -662,9 +658,9 @@ class TestGradeAnswerSubmission:
                 assert result.score == 0
                 assert result.metrics["verifier/failures/timeout"] == 1
                 assert result.metrics["verifier/failures/num_retries"] == 1
-                assert result.metrics["verifier/runtime/latency_per_request"] == pytest.approx(
-                    12.5
-                )
+                assert result.metrics[
+                    "verifier/runtime/latency_per_request"
+                ] == pytest.approx(12.5)
                 assert "verifier/workers/restart_count" in result.metrics
                 assert "verifier/workers/worker_restarted" in result.metrics
                 assert "verifier/queue/depth" in result.metrics
@@ -1271,9 +1267,7 @@ class TestMathVerifierService:
 
         try:
             with patch.object(service, "_run_request_once", side_effect=slow_once):
-                task1 = asyncio.create_task(
-                    service.verify_answer(r"\boxed{1}", "1")
-                )
+                task1 = asyncio.create_task(service.verify_answer(r"\boxed{1}", "1"))
                 await gate_started.wait()
 
                 response2 = await service.verify_answer(r"\boxed{2}", "2")
@@ -1344,7 +1338,9 @@ class TestMathVerifierService:
 
         try:
             with patch.object(service, "_run_request_once", side_effect=crashing_once):
-                with patch.object(service, "_restart_pool", side_effect=restart_wrapper):
+                with patch.object(
+                    service, "_restart_pool", side_effect=restart_wrapper
+                ):
                     response = await service.verify_answer(r"\boxed{4}", "4")
 
             assert response.status == "correct"
@@ -1375,7 +1371,9 @@ class TestMathVerifierService:
             )
 
         try:
-            with patch.object(service, "_run_request_once", side_effect=unparsable_once):
+            with patch.object(
+                service, "_run_request_once", side_effect=unparsable_once
+            ):
                 response = await service.verify_answer("not boxed", "4")
 
             assert response.status == "unparsable"

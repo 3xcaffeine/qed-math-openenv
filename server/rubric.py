@@ -1,9 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
 """
 Rubric implementation for the QED Math Environment.
 
@@ -28,7 +22,6 @@ from typing import Any, Union
 import openai
 
 from openenv.core.rubrics.base import Rubric
-
 
 
 def parse_schema(schema: Any) -> str:
@@ -60,7 +53,6 @@ def parse_schema(schema: Any) -> str:
     return "\n\n".join(sections)
 
 
-
 MAX_SCORE = 7
 
 _DEFAULT_MAX_RETRIES = 3
@@ -81,7 +73,7 @@ class GradingResult:
 
 def apply_score_threshold(score: float) -> float:
     """Apply reward thresholding based on verification score.
-    
+
     Proofs with partial credit (score 1-5) are collapsed to 1.
     """
     if score < 1.0:
@@ -91,16 +83,11 @@ def apply_score_threshold(score: float) -> float:
     return score
 
 
-def length_penalty(
-    max_length: int, sequence_length: int, buffer_tokens: int
-) -> float:
+def length_penalty(max_length: int, sequence_length: int, buffer_tokens: int) -> float:
     """Compute an overlong penalty for sequences approaching *max_length*."""
     if buffer_tokens <= 0:
         return 0.0
-    if (
-        sequence_length > (max_length - buffer_tokens)
-        and sequence_length <= max_length
-    ):
+    if sequence_length > (max_length - buffer_tokens) and sequence_length <= max_length:
         return ((max_length - buffer_tokens) - sequence_length) / buffer_tokens
     return 0.0
 
@@ -201,7 +188,9 @@ class MathProofRubric(Rubric):
                 metrics["verifier/runtime/latency_per_request"] = round(elapsed, 4)
                 metrics["verifier/failures/num_retries"] = attempt - 1
                 metrics["verifier/runtime/input_tokens"] = max(1, len(prompt) // 4)
-                metrics["verifier/runtime/output_tokens"] = max(1, len(response_text) // 4)
+                metrics["verifier/runtime/output_tokens"] = max(
+                    1, len(response_text) // 4
+                )
 
                 if not re.search(r"<score>\d+</score>", response_text):
                     metrics["verifier/failures/no_score_tag"] = 1
@@ -216,7 +205,6 @@ class MathProofRubric(Rubric):
                     reward=reward,
                     metrics=metrics,
                 )
-
 
             except openai.RateLimitError:
                 attempt_causes.append("rate_limit")
@@ -292,7 +280,7 @@ class MathProofRubric(Rubric):
             parts.append(f"\n\nReference Solution:\n{reference_solution}")
         if grading_guidelines:
             parts.append(f"\n\nGrading Guidelines:\n{grading_guidelines}")
-        parts.append(f"\n\nSubmitted Proof:\nproof}")
+        parts.append(f"\n\nSubmitted Proof:\n{proof}")
         parts.append(
             "\n\nProvide your score using exactly this format: <score>N</score> "
             "where N is an integer from 0 to 7."

@@ -1,9 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
 """QED Math Environment Client.
 
 Provides tool-calling style interactions with the QED Math environment
@@ -53,8 +47,9 @@ class QEDMathEnv(MCPToolClient):
             return ProblemObservation(**dict(value))
         if hasattr(value, "model_dump"):
             return ProblemObservation(**value.model_dump())
-        raise TypeError(f"Unsupported problem observation payload type: {type(value).__name__}")
-
+        raise TypeError(
+            f"Unsupported problem observation payload type: {type(value).__name__}"
+        )
 
     @staticmethod
     def _as_proof_submission_observation(value: Any) -> ProofSubmissionObservation:
@@ -65,8 +60,9 @@ class QEDMathEnv(MCPToolClient):
             return ProofSubmissionObservation(**dict(value))
         if hasattr(value, "model_dump"):
             return ProofSubmissionObservation(**value.model_dump())
-        raise TypeError(f"Unsupported proof submission payload type: {type(value).__name__}")
-
+        raise TypeError(
+            f"Unsupported proof submission payload type: {type(value).__name__}"
+        )
 
     async def reset(
         self, problem_id: Optional[str] = None, **kwargs: Any
@@ -93,7 +89,6 @@ class QEDMathEnv(MCPToolClient):
             done=result.done,
         )
 
-
     async def submit_proof(self, proof: str) -> ProofSubmissionObservation:
         """
         Submit a proof attempt for the current problem.
@@ -117,7 +112,6 @@ class QEDMathEnv(MCPToolClient):
         result = await self.call_tool("get_problem")
         return self._as_problem_observation(result)
 
-
     async def get_problem(self) -> ProblemObservation:
         """Compatibility alias for get_current_problem()."""
         return await self.get_current_problem()
@@ -134,7 +128,9 @@ class QEDMathEnv(MCPToolClient):
             return dict(result)
         if hasattr(result, "model_dump"):
             return result.model_dump()
-        raise TypeError(f"Unsupported grading feedback payload type: {type(result).__name__}")
+        raise TypeError(
+            f"Unsupported grading feedback payload type: {type(result).__name__}"
+        )
 
     async def get_state(self) -> State:
         """Return current environment state (episode_id, step_count)."""

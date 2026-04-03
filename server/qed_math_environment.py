@@ -1,9 +1,3 @@
-# Copyright (c) Meta Platforms, Inc. and affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the BSD-style license found in the
-# LICENSE file in the root directory of this source tree.
-
 """
 QED Math Environment Implementation.
 
@@ -30,7 +24,10 @@ import math_verify
 from fastmcp import FastMCP
 
 try:
-    from openenv.core.env_server.mcp_environment import MCPEnvironment, MCP_TOOL_CALL_TIMEOUT
+    from openenv.core.env_server.mcp_environment import (
+        MCPEnvironment,
+        MCP_TOOL_CALL_TIMEOUT,
+    )
     from openenv.core.env_server.mcp_types import (
         CallToolAction,
         CallToolObservation,
@@ -42,15 +39,12 @@ try:
     )
     from openenv.core.env_server.types import Action, Observation, State
 except ImportError:
-    from openenv.core.env_server.mcp_environment import MCPEnvironment, MCP_TOOL_CALL_TIMEOUT
+    from openenv.core.env_server.mcp_environment import (
+        MCPEnvironment,
+    )
     from openenv.core.env_server.mcp_types import (
         CallToolAction,
         CallToolObservation,
-        ListToolsAction,
-        ListToolsObservation,
-        Tool,
-        ToolError,
-        ToolErrorType,
     )
     from openenv.core.env_server.types import Action, Observation, State
 
@@ -323,7 +317,9 @@ def _normalize_problem(
     problem_type = _canonical_problem_type(raw_problem)
     default_max_attempts = 1 if problem_type != "multi_step" else 3
     max_attempts = _coerce_positive_int(
-        _first_present_value(raw_problem, ("max_attempts", "attempts", "num_attempts"), None),
+        _first_present_value(
+            raw_problem, ("max_attempts", "attempts", "num_attempts"), None
+        ),
         default=default_max_attempts,
     )
     success_score_threshold = _coerce_positive_int(
@@ -345,9 +341,7 @@ def _normalize_problem(
     ):
         reference_solution = f"\\boxed{{{reference_solution}}}"
 
-    original_problem = _first_present_value(
-        raw_problem, ("original_problem",), None
-    )
+    original_problem = _first_present_value(raw_problem, ("original_problem",), None)
 
     return {
         "problem": problem,
@@ -488,18 +482,13 @@ class QEDMathEnvironment(MCPEnvironment):
         self._gold_cache_hits = 0
         self._gold_cache_misses = 0
         self._build_gold_answer_cache()
-        judge_api_base_url = (
-            os.environ.get("JUDGE_API_BASE_URL")
-            or os.environ.get("OPENAI_BASE_URL")
+        judge_api_base_url = os.environ.get("JUDGE_API_BASE_URL") or os.environ.get(
+            "OPENAI_BASE_URL"
         )
-        judge_api_key = (
-            os.environ.get("JUDGE_API_KEY")
-            or os.environ.get("OPENAI_API_KEY")
+        judge_api_key = os.environ.get("JUDGE_API_KEY") or os.environ.get(
+            "OPENAI_API_KEY"
         )
-        judge_model = (
-            os.environ.get("JUDGE_MODEL")
-            or self._config.grader_model
-        )
+        judge_model = os.environ.get("JUDGE_MODEL") or self._config.grader_model
         self._rubric = MathProofRubric(
             grader_model=judge_model,
             prompt_template=self._prompt_template,
@@ -555,7 +544,9 @@ class QEDMathEnvironment(MCPEnvironment):
                     "Failed to pre-parse answer-mode gold for problem_id=%s; deferring to runtime verifier.",
                     problem_id,
                 )
-            self._gold_answer_cache[self._gold_cache_key(problem_id)] = reference_solution
+            self._gold_answer_cache[self._gold_cache_key(problem_id)] = (
+                reference_solution
+            )
 
     def _refresh_gold_cache_if_needed(self) -> None:
         current_signature = self._build_gold_cache_signature()
@@ -829,7 +820,9 @@ class QEDMathEnvironment(MCPEnvironment):
     def _chunk_feedback(feedback: str, chunk_size: int = 280) -> list[str]:
         if not feedback:
             return []
-        return [feedback[i : i + chunk_size] for i in range(0, len(feedback), chunk_size)]
+        return [
+            feedback[i : i + chunk_size] for i in range(0, len(feedback), chunk_size)
+        ]
 
     def _build_grading_progress(
         self,
@@ -1053,10 +1046,9 @@ class QEDMathEnvironment(MCPEnvironment):
         if not grading_input.strip() and submission.strip():
             grading_input = submission
 
-        problem = (
-            self._current_problem.get("original_problem")
-            or self._current_problem.get("problem", "")
-        )
+        problem = self._current_problem.get(
+            "original_problem"
+        ) or self._current_problem.get("problem", "")
         reference_solution = self._current_problem.get("reference_solution", "")
         grading_guidelines = parse_schema(
             self._current_problem.get("grading_guidelines", "") or ""
@@ -1090,7 +1082,7 @@ class QEDMathEnvironment(MCPEnvironment):
         if output_length_tokens <= 0:
             return reward
 
-        reward = reward * (self._discount_factor ** output_length_tokens)
+        reward = reward * (self._discount_factor**output_length_tokens)
 
         if self._buffer_tokens > 0 and self._max_tokens > 0:
             reward += length_penalty(
@@ -1191,7 +1183,11 @@ class QEDMathEnvironment(MCPEnvironment):
         metrics["reward/base"] = result.reward
         metrics["reward/shaped"] = shaped_reward
         metrics["reward/score_raw"] = result.score
-        if output_length_tokens > 0 and self._buffer_tokens > 0 and self._max_tokens > 0:
+        if (
+            output_length_tokens > 0
+            and self._buffer_tokens > 0
+            and self._max_tokens > 0
+        ):
             from .rubric import length_penalty as _lp
 
             metrics["reward/overlong_penalty"] = _lp(
