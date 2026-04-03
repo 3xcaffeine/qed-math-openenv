@@ -15,7 +15,7 @@ Integration tests (require running server, marked @pytest.mark.integration):
   - Full HTTP/WebSocket stack smoke test
 
 Run from repo root:
-    PYTHONPATH=src:envs uv run pytest tests/envs/test_qed_math_environment.py -v
+    uv run pytest tests/test_environment.py -v
 """
 
 from __future__ import annotations
@@ -28,10 +28,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
-# Path setup — ensure src/ and envs/ are importable
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "src"))
-sys.path.insert(0, str(REPO_ROOT / "envs"))
+# Path setup — ensure repository root is importable
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
 
 # Autouse fixture: patch openai.AsyncOpenAI so tests that instantiate
@@ -53,17 +52,17 @@ pytest.importorskip("math_verify", reason="math_verify is not installed")
 pytest.importorskip("fastmcp", reason="fastmcp is not installed")
 
 from openenv.core.env_server.mcp_environment import get_server_tools  # noqa: E402
-from qed_math_env.models import (  # noqa: E402
+from models import (  # noqa: E402
     ProblemObservation,
     ProofSubmissionObservation,
 )
-from qed_math_env.server.qed_math_environment import (  # noqa: E402
+from server.qed_math_environment import (  # noqa: E402
     QEDMathEnvironment,
     _normalize_problem,
     load_problems,
     remove_reasoning,
 )
-from qed_math_env.server.rubric import (  # noqa: E402
+from server.rubric import (  # noqa: E402
     GradingResult,
     MathProofRubric,
     apply_score_threshold,
@@ -71,7 +70,7 @@ from qed_math_env.server.rubric import (  # noqa: E402
     parse_schema,
     MAX_SCORE,
 )
-from qed_math_env.server.math_verify_service import (  # noqa: E402
+from server.math_verify_service import (  # noqa: E402
     MathVerifierService,
     VerifyRequest,
     VerifyResponse,
@@ -502,6 +501,7 @@ class TestQEDMathEnvironmentReset:
     def test_reset_fields_populated(self):
         env = _make_env()
         obs = env.reset()
+        assert isinstance(obs, ProblemObservation)
         assert obs.problem_id != ""
         assert obs.dataset_source != ""
         assert obs.max_attempts >= 1
@@ -1349,7 +1349,9 @@ class TestMathVerifierService:
             assert restart_calls["count"] == 1
 
             health = await service.health_probe()
-            assert health["restart_count"] >= 1
+            restart_count = health["restart_count"]
+            assert isinstance(restart_count, (int, float))
+            assert restart_count >= 1
         finally:
             await service.stop()
 
@@ -1424,6 +1426,7 @@ class TestGoldCache:
         env = _make_env_with_problem(ANSWER_PROBLEM)
         env.reset()
 
+        assert env._current_problem is not None
         problem_id = env._current_problem["problem_id"]
         env._gold_answer_cache[env._gold_cache_key(problem_id)] = r"\boxed{42}"
 
@@ -1456,6 +1459,7 @@ class TestGoldCache:
 
         assert env._gold_cache_signature != old_signature
         env.reset()
+        assert env._current_problem is not None
         problem_id = env._current_problem["problem_id"]
         assert env._gold_cache_key(problem_id) in env._gold_answer_cache
 
@@ -1495,7 +1499,7 @@ class TestQEDMathServerIntegration:
 
     @pytest.fixture
     def env(self):
-        from qed_math_env.client import QEDMathEnv
+        from client import QEDMathEnv
 
         with QEDMathEnv(base_url=self.BASE_URL).sync() as e:
             yield e
