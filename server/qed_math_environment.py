@@ -76,13 +76,14 @@ class EmptyBoxedException(Exception):
 
 
 def _parse_math_verify_expression(value: str) -> Any:
-    parsed = math_verify.parse(value)
+    # Work around Windows multiprocessing issues in math-verify timeout wrappers.
+    parsed = math_verify.parse(value, parsing_timeout=0)
     if parsed:
         return parsed
 
     boxed_match = re.search(r"\\boxed\{(.+?)\}", value)
     if boxed_match:
-        return math_verify.parse(boxed_match.group(1))
+        return math_verify.parse(boxed_match.group(1), parsing_timeout=0)
 
     return parsed
 
@@ -912,11 +913,11 @@ class QEDMathEnvironment(MCPEnvironment):
                 gold_parsed,
                 boxed_prediction_parsed,
                 strict=strict,
-                timeout_seconds=1,
+                timeout_seconds=None,
             )
             return "correct" if equivalent else "wrong"
 
-        except Exception:
+        except Exception as exc:
             if isinstance(exc, NoAnswerException):
                 return "no_answer"
             return "unparsable"

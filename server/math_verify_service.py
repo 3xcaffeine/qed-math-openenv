@@ -42,13 +42,14 @@ class VerifyResponse:
 
 
 def _parse_math_verify_expression(value: str):
-    parsed = math_verify.parse(value)
+    # Work around Windows multiprocessing issues in math-verify timeout wrappers.
+    parsed = math_verify.parse(value, parsing_timeout=0)
     if parsed:
         return parsed
 
     boxed_match = re.search(r"\\boxed\{(.+?)\}", value)
     if boxed_match:
-        return math_verify.parse(boxed_match.group(1))
+        return math_verify.parse(boxed_match.group(1), parsing_timeout=0)
 
     return parsed
 
@@ -116,8 +117,11 @@ def _verify_answer_worker(request: VerifyRequest) -> VerifyResponse:
                     equivalent = math_verify.verify(
                         gold_parsed,
                         boxed_prediction_parsed,
+                        float_rounding=request.float_rounding,
+                        numeric_precision=request.numeric_precision,
                         strict=request.strict,
-                        timeout_seconds=request.timeout_seconds,
+                        # We enforce timeout at the service layer via asyncio.wait_for.
+                        timeout_seconds=0,
                     )
                     status = "correct" if equivalent else "wrong"
                 except Exception as exc:
