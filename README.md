@@ -1,3 +1,13 @@
+---
+title: qed-math-openenv
+emoji: "🧮"
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # QED Math Environment
 
 A mathematical proof generation and evaluation environment for OpenEnv.
