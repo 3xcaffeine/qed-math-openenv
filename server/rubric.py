@@ -121,7 +121,7 @@ class MathProofRubric(Rubric):
             client_kwargs["api_key"] = api_key
         self._client = openai.AsyncOpenAI(**client_kwargs)
 
-    async def forward(self, action: Any, observation: Any) -> float:
+    async def forward(self, action: Any, observation: Any) -> float: # type: ignore
         """Evaluate a proof submission and return the normalized reward."""
         proof = getattr(action, "proof", str(action))
         problem = getattr(observation, "problem", "")
