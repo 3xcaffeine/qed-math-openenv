@@ -1,0 +1,21 @@
+name: Check file size for HF Spaces
+
+on:
+  push:
+    branches:
+      - main
+      - gh-actions
+  workflow_dispatch:
+
+jobs:
+  check-large-files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Warn on files over 10MB
+        uses: ActionsDesk/lfs-warning@v2.0
+        with:
+          filesizelimit: 10485760
