@@ -1,0 +1,82 @@
+name: Sync to Hugging Face Space
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: sync-to-hf-space
+  cancel-in-progress: true
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Validate required settings
+        env:
+          HF_SPACE_ID: ${{ vars['HF_SPACE_ID'] }}
+          HF_TOKEN: ${{ secrets['HF_TOKEN'] }}
+          JUDGE_API_KEY: ${{ secrets['JUDGE_API_KEY'] }}
+        run: |
+          if [ -z "$HF_SPACE_ID" ]; then
+            echo "::error::Missing repository variable HF_SPACE_ID (format: username/space_name)."
+            exit 1
+          fi
+
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::error::Missing repository secret HF_TOKEN."
+            exit 1
+          fi
+
+          if [ -z "$JUDGE_API_KEY" ]; then
+            echo "::error::Missing repository secret JUDGE_API_KEY."
+            exit 1
+          fi
+
+      - name: Install Hugging Face client
+        run: python -m pip install --upgrade huggingface_hub
+
+      - name: Configure Space runtime settings
+        env:
+          HF_SPACE_ID: ${{ vars['HF_SPACE_ID'] }}
+          HF_TOKEN: ${{ secrets['HF_TOKEN'] }}
+          JUDGE_API_BASE_URL: ${{ vars['JUDGE_API_BASE_URL'] || 'https://router.huggingface.co/v1' }}
+          JUDGE_MODEL: ${{ vars['JUDGE_MODEL'] || 'openai/gpt-oss-120b:novita' }}
+          JUDGE_API_KEY: ${{ secrets['JUDGE_API_KEY'] }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space_id = os.environ["HF_SPACE_ID"]
+
+          api.add_space_variable(space_id, "JUDGE_API_BASE_URL", os.environ["JUDGE_API_BASE_URL"])
+          api.add_space_variable(space_id, "JUDGE_MODEL", os.environ["JUDGE_MODEL"])
+          api.add_space_secret(space_id, "JUDGE_API_KEY", os.environ["JUDGE_API_KEY"])
+
+          print(f"Runtime settings updated for {space_id}")
+          PY
+
+      - name: Push main to Hugging Face Space
+        env:
+          HF_SPACE_ID: ${{ vars['HF_SPACE_ID'] }}
+          HF_TOKEN: ${{ secrets['HF_TOKEN'] }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add space "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID}"
+          # Keep the Space as an exact mirror of this repository's main branch.
+          git push --force space HEAD:main
