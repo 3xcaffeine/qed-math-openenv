@@ -1,11 +1,6 @@
-"""Inference script for QED Math with strict benchmark logging.
+"""Inference script for QED Math with strict stdout compliance.
 
-Required environment variables:
-- API_BASE_URL: OpenAI-compatible endpoint for the LLM API.
-- MODEL_NAME: model identifier used for inference.
-- HF_TOKEN: API key for the endpoint.
-
-Defaults are only provided for API_BASE_URL and MODEL_NAME.
+This script emits only [START], [STEP], and [END] lines to stdout.
 """
 
 from __future__ import annotations
@@ -83,7 +78,7 @@ def log_start(task: str, env: str, model: str) -> None:
 
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
-    error_val = _single_line(error) if error else "null"
+    error_val = str(error) if error else "null"
     print(
         f"[STEP] step={step} action={_single_line(action)} reward={reward:.2f} "
         f"done={str(done).lower()} error={error_val}",
@@ -160,14 +155,23 @@ def _extract_tool_call(response: Any) -> tuple[str, dict[str, Any], str]:
     return tool_name, tool_args, tool_call_id
 
 
+def _as_mapping(value: Any) -> dict[str, Any]:
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if isinstance(value, dict):
+        return value
+    return {"result": str(value)}
+
+
 async def run_episode(
     env: QEDMathEnv,
     client: OpenAI,
     tools: list[dict[str, Any]],
-) -> tuple[bool, int, list[float]]:
+ ) -> tuple[bool, int, list[float]]:
     tool_names = {tool["function"]["name"] for tool in tools}
 
     await env.reset()
+
     chat_history: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": "Solve the current QED math problem."},
@@ -176,7 +180,6 @@ async def run_episode(
     rewards: list[float] = []
     steps_taken = 0
     success = False
-    total_output_tokens = 0
 
     for step in range(1, MAX_STEPS + 1):
         response = client.chat.completions.create(
@@ -189,9 +192,6 @@ async def run_episode(
             stream=False,
         )
 
-        if response.usage:
-            total_output_tokens += int(response.usage.completion_tokens or 0)
-
         tool_name, tool_args, tool_call_id = _extract_tool_call(response)
 
         if tool_name not in tool_names:
@@ -202,19 +202,15 @@ async def run_episode(
 
         step_result = await env.call_tool(tool_name, **call_kwargs)
 
-        if hasattr(step_result, "model_dump"):
-            result_dict = step_result.model_dump()
-        elif isinstance(step_result, dict):
-            result_dict = step_result
-        else:
-            result_dict = {"result": str(step_result)}
+        result_dict = _as_mapping(step_result)
 
         reward = float(result_dict.get("reward") or 0.0)
         done = bool(result_dict.get("done", False))
-        error = result_dict.get("last_action_error")
+        error_raw = result_dict.get("last_action_error")
+        error = str(error_raw) if error_raw is not None else None
 
         action_str = json.dumps({"tool": tool_name, "args": tool_args}, ensure_ascii=True)
-        log_step(step=step, action=action_str, reward=reward, done=done, error=cast(Optional[str], error))
+        log_step(step=step, action=action_str, reward=reward, done=done, error=error)
 
         rewards.append(reward)
         steps_taken = step
@@ -265,16 +261,26 @@ async def async_main() -> None:
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
+    caught_error: Exception | None = None
+
     try:
         async with QEDMathEnv(base_url=QED_MATH_URL) as raw_env:
             env = cast(QEDMathEnv, raw_env)
             mcp_tools = await env.list_tools()
             tools = _tools_to_openai_format(mcp_tools)
-            success, steps_taken, rewards = await run_episode(env=env, client=client, tools=tools)
-    except Exception:
+            success, steps_taken, rewards = await run_episode(
+                env=env,
+                client=client,
+                tools=tools,
+            )
+    except Exception as exc:
+        caught_error = exc
         success = False
     finally:
         log_end(success=success, steps=steps_taken, rewards=rewards)
+
+    if caught_error is not None:
+        raise SystemExit(1) from caught_error
 
 
 def main() -> None:
