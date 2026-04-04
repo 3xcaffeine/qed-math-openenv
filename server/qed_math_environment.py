@@ -54,6 +54,27 @@ logger = logging.getLogger(__name__)
 DatasetSource = str | dict[str, Any] | list[str | dict[str, Any]] | None
 
 
+def _dataset_source_from_env() -> DatasetSource:
+    raw_spec = (os.environ.get("QED_DATASET_SPEC_JSON") or "").strip()
+    if raw_spec:
+        try:
+            parsed = json.loads(raw_spec)
+        except json.JSONDecodeError:
+            logger.warning("Ignoring invalid QED_DATASET_SPEC_JSON value.")
+        else:
+            if isinstance(parsed, (str, dict, list)):
+                return parsed
+            logger.warning(
+                "Ignoring QED_DATASET_SPEC_JSON with unsupported type: %s",
+                type(parsed).__name__,
+            )
+
+    raw_path = (os.environ.get("QED_DATASET_PATH") or "").strip()
+    if raw_path:
+        return raw_path
+    return None
+
+
 def _default_verifier_workers() -> int:
     cpu_count = os.cpu_count() or 2
     return max(2, min(8, cpu_count // 2 or 1))
@@ -226,12 +247,10 @@ def _read_hub_problem_rows(
         hub_id = spec
         config = None
         split = "train"
-        trust_remote_code = True
     else:
         hub_id = str(spec.get("hub_id") or spec.get("dataset") or "").strip()
         config = spec.get("config")
         split = spec.get("split", "train")
-        trust_remote_code = spec.get("trust_remote_code", True)
 
     if not hub_id:
         raise ValueError("Hub dataset specs must include 'hub_id' or 'dataset'.")
@@ -243,7 +262,6 @@ def _read_hub_problem_rows(
     dataset = load_dataset(
         *load_args,
         split=split,
-        trust_remote_code=trust_remote_code,
     )
     rows = [dict(row) for row in dataset]
     logger.info(
@@ -412,7 +430,7 @@ def load_problems(dataset_path: DatasetSource) -> list[dict]:
 class QEDMathEnvironment(MCPEnvironment):
     def __init__(
         self,
-        dataset_path: str | None = None,
+        dataset_path: DatasetSource = None,
         grader_model: str | None = None,
         prompt_name: str | None = None,
         custom_reward_threshold: bool | None = None,
@@ -426,10 +444,14 @@ class QEDMathEnvironment(MCPEnvironment):
         super().__init__(mcp)
 
         base_config = config or QEDMathConfig()
+        resolved_dataset_path = (
+            dataset_path if dataset_path is not None else base_config.dataset_path
+        )
+        if resolved_dataset_path is None:
+            resolved_dataset_path = _dataset_source_from_env()
+
         self._config = QEDMathConfig(
-            dataset_path=(
-                dataset_path if dataset_path is not None else base_config.dataset_path
-            ),
+            dataset_path=resolved_dataset_path,
             grader_model=(
                 grader_model if grader_model is not None else base_config.grader_model
             ),
@@ -1191,6 +1213,19 @@ class QEDMathEnvironment(MCPEnvironment):
         return {
             "grading_guidelines": self._current_grading_guidelines_text(),
             "problem_id": self._current_problem.get("problem_id", ""),
+            "done": False,
+            "reward": 0.0,
+        }
+
+    def list_task_ids_payload(self) -> dict:
+        task_ids: list[str] = []
+        for idx, problem in enumerate(self._problems):
+            raw_id = str(problem.get("problem_id", "")).strip()
+            task_ids.append(raw_id or f"problem_{idx + 1:06d}")
+
+        return {
+            "task_ids": task_ids,
+            "task_count": len(task_ids),
             "done": False,
             "reward": 0.0,
         }

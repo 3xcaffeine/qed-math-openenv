@@ -15,6 +15,9 @@ version: "0.1.0"
 
 # Environment configuration defaults (overridable via QEDMathConfig)
 environment:
+  dataset_path:
+    hub_id: lm-provers/FineProofs-RL-test
+    split: test[:10]
   grader_model: gemini-3-pro
   prompt_name: v2
   custom_reward_threshold: false
@@ -47,6 +50,8 @@ tools:
       - proof (str, required)
   - name: get_grading_guidelines
     description: Return the rubric/marking scheme for the current problem
+  - name: list_task_ids
+    description: Return ordered task ids loaded by the current dataset configuration
 
 # Verifier metrics emitted per grading call
 metrics:

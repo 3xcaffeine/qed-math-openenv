@@ -37,3 +37,8 @@ def register_mcp_tools(mcp: FastMCP, env: "QEDMathEnvironment") -> None:
     def get_grading_guidelines() -> dict:
         """Get grading rubric text for the current problem."""
         return env.get_grading_guidelines_payload()
+
+    @mcp.tool
+    def list_task_ids() -> dict:
+        """Return ordered task identifiers available in the loaded dataset."""
+        return env.list_task_ids_payload()
