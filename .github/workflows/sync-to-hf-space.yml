@@ -73,6 +73,17 @@ jobs:
 
           api = HfApi(token=hf_token)
 
+          if not api.repo_exists(space_id, repo_type="space"):
+            print(f"Space {space_id} not found. Creating Docker Space...")
+            api.create_repo(
+              repo_id=space_id,
+              repo_type="space",
+              space_sdk="docker",
+              exist_ok=True,
+            )
+          else:
+            print(f"Space {space_id} already exists.")
+
           api.add_space_variable(space_id, "JUDGE_API_BASE_URL", judge_api_base_url)
           api.add_space_variable(space_id, "JUDGE_MODEL", judge_model)
           api.add_space_secret(space_id, "JUDGE_API_KEY", judge_api_key)
