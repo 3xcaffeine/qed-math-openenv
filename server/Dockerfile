@@ -63,6 +63,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/env:$PYTHONPATH"
 
 ENV PYTHONUNBUFFERED=1
+ENV QED_DATASET_SPEC_JSON="{\"hub_id\":\"lm-provers/FineProofs-RL-test\",\"split\":\"test[:10]\"}"
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')" || exit 1
