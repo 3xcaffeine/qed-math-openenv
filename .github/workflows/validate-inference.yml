@@ -1,0 +1,57 @@
+name: Validate Inference
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    env:
+      JUDGE_API_BASE_URL: ${{ vars.JUDGE_API_BASE_URL || 'https://router.huggingface.co/v1' }}
+      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'openai/gpt-oss-120b:novita' }}
+      JUDGE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      QED_MATH_URL: "http://localhost:8000"
+      MAX_STEPS: "4"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Start server
+        run: uv run uvicorn server.app:app --host 0.0.0.0 --port 8000 &
+
+      - name: Wait for server to be healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/healthz; then
+              echo "Server is healthy"
+              exit 0
+            fi
+            echo "Attempt $i/30 — waiting..."
+            sleep 2
+          done
+          echo "::error::Server did not become healthy in time"
+          exit 1
+
+      - name: Run inference
+        run: uv run python inference.py
+
+      - name: Stop server
+        if: always()
+        run: pkill -f "uvicorn server.app:app" || true

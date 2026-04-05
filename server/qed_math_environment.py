@@ -9,18 +9,16 @@ import asyncio
 import json
 import logging
 import os
-import re
-from datetime import datetime, timezone
-from dataclasses import dataclass, field
-from pathlib import Path
-from datasets import load_dataset
-
 import random
-from uuid import uuid4
+import re
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
+from uuid import uuid4
 
 import math_verify
-
+from datasets import load_dataset
 from fastmcp import FastMCP
 from openenv.core.env_server.mcp_environment import (
     MCPEnvironment,
@@ -36,13 +34,11 @@ from openenv.core.env_server.mcp_types import (
 )
 from openenv.core.env_server.types import Action, Observation, State
 
-
 from models import ProblemObservation, ProofSubmissionObservation
 
+from .math_verify_service import MathVerifierService
 from .mcp_server import register_mcp_tools
 from .rubric import GradingResult, MathProofRubric, length_penalty, parse_schema
-from .math_verify_service import MathVerifierService
-
 
 DEFAULT_EVALUATOR_PROMPT = (
     "You are a strict math proof grader. Score the submission from 0 to 7 based on "
@@ -205,7 +201,8 @@ def _coerce_dataset_specs(dataset_path: DatasetSource) -> list[str | dict[str, A
     if isinstance(dataset_path, list):
         return dataset_path
     raise TypeError(
-        "dataset_path must be None, a string path or hub id, a dataset spec dict, or a list of specs."
+        "dataset_path must be None, a string path or hub id, a dataset spec dict, or a list of"
+        " specs."
     )
 
 
@@ -285,9 +282,7 @@ def _first_present_value(
     return default
 
 
-def _normalize_problem(
-    raw_problem: dict[str, Any], index: int, dataset_source: str
-) -> dict:
+def _normalize_problem(raw_problem: dict[str, Any], index: int, dataset_source: str) -> dict:
     problem = _first_present_value(raw_problem, ("problem", "task", "Problem"))
     if not isinstance(problem, str) or not problem.strip():
         raise ValueError("Dataset row is missing a non-empty problem statement.")
@@ -322,9 +317,7 @@ def _normalize_problem(
     problem_type = _canonical_problem_type(raw_problem)
     default_max_attempts = 1 if problem_type != "multi_step" else 3
     max_attempts = _coerce_positive_int(
-        _first_present_value(
-            raw_problem, ("max_attempts", "attempts", "num_attempts"), None
-        ),
+        _first_present_value(raw_problem, ("max_attempts", "attempts", "num_attempts"), None),
         default=default_max_attempts,
     )
     success_score_threshold = _coerce_positive_int(
@@ -370,14 +363,13 @@ def _load_problems_from_spec(
         if "path" in spec:
             path = Path(spec["path"])
             rows = _read_local_problem_rows(path)
-            dataset_source = str(
-                spec.get("dataset_source") or spec.get("dataset") or path.stem
-            )
+            dataset_source = str(spec.get("dataset_source") or spec.get("dataset") or path.stem)
         elif "hub_id" in spec or "dataset" in spec:
             rows, dataset_source = _read_hub_problem_rows(spec)
         else:
             raise ValueError(
-                "Dataset spec dict must include either 'path' for local files or 'hub_id'/'dataset' for hub datasets."
+                "Dataset spec dict must include either 'path' for local files or"
+                " 'hub_id'/'dataset' for hub datasets."
             )
     else:
         candidate_path = Path(spec)
@@ -391,15 +383,14 @@ def _load_problems_from_spec(
             rows, dataset_source = _read_hub_problem_rows(spec)
         else:
             raise ValueError(
-                "Dataset source must be a local .json/.jsonl path or a Hugging Face dataset id like 'owner/name'."
+                "Dataset source must be a local .json/.jsonl path or a Hugging Face dataset id"
+                " like 'owner/name'."
             )
 
     problems: list[dict[str, Any]] = []
     for offset, row in enumerate(rows, start=1):
         try:
-            problems.append(
-                _normalize_problem(row, start_index + offset, dataset_source)
-            )
+            problems.append(_normalize_problem(row, start_index + offset, dataset_source))
         except ValueError:
             logger.warning(
                 "Skipping invalid QED math dataset row from %s at offset %d",
@@ -452,20 +443,14 @@ class QEDMathEnvironment(MCPEnvironment):
 
         self._config = QEDMathConfig(
             dataset_path=resolved_dataset_path,
-            grader_model=(
-                grader_model if grader_model is not None else base_config.grader_model
-            ),
-            prompt_name=(
-                prompt_name if prompt_name is not None else base_config.prompt_name
-            ),
+            grader_model=(grader_model if grader_model is not None else base_config.grader_model),
+            prompt_name=(prompt_name if prompt_name is not None else base_config.prompt_name),
             custom_reward_threshold=(
                 custom_reward_threshold
                 if custom_reward_threshold is not None
                 else base_config.custom_reward_threshold
             ),
-            max_attempts=(
-                max_attempts if max_attempts is not None else base_config.max_attempts
-            ),
+            max_attempts=(max_attempts if max_attempts is not None else base_config.max_attempts),
             discount_factor=base_config.discount_factor,
             buffer_tokens=base_config.buffer_tokens,
             max_tokens=base_config.max_tokens,
@@ -494,9 +479,7 @@ class QEDMathEnvironment(MCPEnvironment):
         judge_api_base_url = os.environ.get("JUDGE_API_BASE_URL") or os.environ.get(
             "OPENAI_BASE_URL"
         )
-        judge_api_key = os.environ.get("JUDGE_API_KEY") or os.environ.get(
-            "OPENAI_API_KEY"
-        )
+        judge_api_key = os.environ.get("JUDGE_API_KEY") or os.environ.get("OPENAI_API_KEY")
         judge_model = os.environ.get("JUDGE_MODEL") or self._config.grader_model
         self._rubric = MathProofRubric(
             grader_model=judge_model,
@@ -550,12 +533,11 @@ class QEDMathEnvironment(MCPEnvironment):
                 _parse_math_verify_expression(reference_solution)
             except Exception:
                 logger.warning(
-                    "Failed to pre-parse answer-mode gold for problem_id=%s; deferring to runtime verifier.",
+                    "Failed to pre-parse answer-mode gold for problem_id=%s;"
+                    " deferring to runtime verifier.",
                     problem_id,
                 )
-            self._gold_answer_cache[self._gold_cache_key(problem_id)] = (
-                reference_solution
-            )
+            self._gold_answer_cache[self._gold_cache_key(problem_id)] = reference_solution
 
     def _refresh_gold_cache_if_needed(self) -> None:
         current_signature = self._build_gold_cache_signature()
@@ -813,9 +795,7 @@ class QEDMathEnvironment(MCPEnvironment):
     def _chunk_feedback(feedback: str, chunk_size: int = 280) -> list[str]:
         if not feedback:
             return []
-        return [
-            feedback[i : i + chunk_size] for i in range(0, len(feedback), chunk_size)
-        ]
+        return [feedback[i : i + chunk_size] for i in range(0, len(feedback), chunk_size)]
 
     def _build_grading_progress(
         self,
@@ -896,9 +876,7 @@ class QEDMathEnvironment(MCPEnvironment):
         }
 
         if evaluation_mode == "answer":
-            payload["reference_solution"] = self._current_problem.get(
-                "reference_solution", ""
-            )
+            payload["reference_solution"] = self._current_problem.get("reference_solution", "")
 
         return payload
 
@@ -964,7 +942,8 @@ class QEDMathEnvironment(MCPEnvironment):
         verifier_service_metrics = await self._verifier_service.metrics_snapshot()
 
         logger.info(
-            "qed_math_verifier_result request_id=%s problem_id=%s evaluation_mode=answer status=%s elapsed_ms=%.3f retry_count=%d",
+            "qed_math_verifier_result request_id=%s problem_id=%s evaluation_mode=answer"
+            " status=%s elapsed_ms=%.3f retry_count=%d",
             response.request_id,
             problem_id,
             answer_status,
@@ -991,13 +970,9 @@ class QEDMathEnvironment(MCPEnvironment):
                 ),
                 "verifier/failures/num_retries": int(response.retry_count),
                 "verifier/runtime/latency_per_request": float(response.elapsed_ms),
-                "verifier/workers/restart_count": int(
-                    verifier_health.get("restart_count", 0)
-                ),
+                "verifier/workers/restart_count": int(verifier_health.get("restart_count", 0)),
                 "verifier/workers/worker_restarted": int(response.worker_restarted),
-                "verifier/queue/depth": int(
-                    verifier_health.get("inflight_requests", 0)
-                ),
+                "verifier/queue/depth": int(verifier_health.get("inflight_requests", 0)),
                 "verifier/requests/count": int(
                     verifier_service_metrics.get("verifier/requests/count", 0)
                 ),
@@ -1011,9 +986,7 @@ class QEDMathEnvironment(MCPEnvironment):
                     verifier_service_metrics.get("verifier/requests/error_count", 0)
                 ),
                 "verifier/workers/heartbeat_lag_ms": float(
-                    verifier_service_metrics.get(
-                        "verifier/workers/heartbeat_lag_ms", 0.0
-                    )
+                    verifier_service_metrics.get("verifier/workers/heartbeat_lag_ms", 0.0)
                 ),
                 "verifier/cache/hit_rate": self._gold_cache_hit_rate(),
                 "verifier/runtime/input_tokens": 0,
@@ -1039,13 +1012,11 @@ class QEDMathEnvironment(MCPEnvironment):
         if not grading_input.strip() and submission.strip():
             grading_input = submission
 
-        problem = self._current_problem.get(
-            "original_problem"
-        ) or self._current_problem.get("problem", "")
-        reference_solution = self._current_problem.get("reference_solution", "")
-        grading_guidelines = parse_schema(
-            self._current_problem.get("grading_guidelines", "") or ""
+        problem = self._current_problem.get("original_problem") or self._current_problem.get(
+            "problem", ""
         )
+        reference_solution = self._current_problem.get("reference_solution", "")
+        grading_guidelines = parse_schema(self._current_problem.get("grading_guidelines", "") or "")
         evaluation_mode = self._current_problem.get("evaluation_mode", "proof")
 
         if evaluation_mode == "answer":
@@ -1078,9 +1049,7 @@ class QEDMathEnvironment(MCPEnvironment):
         reward = reward * (self._discount_factor**output_length_tokens)
 
         if self._buffer_tokens > 0 and self._max_tokens > 0:
-            reward += length_penalty(
-                self._max_tokens, output_length_tokens, self._buffer_tokens
-            )
+            reward += length_penalty(self._max_tokens, output_length_tokens, self._buffer_tokens)
 
         return reward
 
@@ -1176,11 +1145,7 @@ class QEDMathEnvironment(MCPEnvironment):
         metrics["reward/base"] = result.reward
         metrics["reward/shaped"] = shaped_reward
         metrics["reward/score_raw"] = result.score
-        if (
-            output_length_tokens > 0
-            and self._buffer_tokens > 0
-            and self._max_tokens > 0
-        ):
+        if output_length_tokens > 0 and self._buffer_tokens > 0 and self._max_tokens > 0:
             from .rubric import length_penalty as _lp
 
             metrics["reward/overlong_penalty"] = _lp(

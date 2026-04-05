@@ -263,9 +263,7 @@ class MathVerifierService:
     async def metrics_snapshot(self) -> dict[str, float | int]:
         async with self._metrics_lock:
             requests_count = self._requests_total
-            latency_avg_ms = (
-                self._latency_total_ms / requests_count if requests_count > 0 else 0.0
-            )
+            latency_avg_ms = self._latency_total_ms / requests_count if requests_count > 0 else 0.0
             heartbeat_lag_ms = max(
                 0.0,
                 (time.perf_counter() - self._last_activity_monotonic) * 1000,
@@ -365,9 +363,7 @@ class MathVerifierService:
             )
 
         except Exception as exc:
-            logger.exception(
-                "Verification request %s failed with exception", request_id
-            )
+            logger.exception("Verification request %s failed with exception", request_id)
             return VerifyResponse(
                 request_id=request_id,
                 status="internal_error",
@@ -414,13 +410,9 @@ class MathVerifierService:
             timeout_seconds=max(1, int(timeout_seconds or 1)),
             max_prediction_length=max_prediction_length,
             numeric_precision=(
-                numeric_precision
-                if numeric_precision is not None
-                else self.numeric_precision
+                numeric_precision if numeric_precision is not None else self.numeric_precision
             ),
-            float_rounding=(
-                float_rounding if float_rounding is not None else self.float_rounding
-            ),
+            float_rounding=(float_rounding if float_rounding is not None else self.float_rounding),
         )
 
         retry_count = 0
@@ -429,9 +421,7 @@ class MathVerifierService:
             while True:
                 response = await self._run_request_once(request)
 
-                if retry_count < self.max_retries and self._is_retryable_response(
-                    response
-                ):
+                if retry_count < self.max_retries and self._is_retryable_response(response):
                     if self._requires_restart(response):
                         await self._restart_pool()
                         worker_restarted = True

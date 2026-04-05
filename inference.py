@@ -40,7 +40,7 @@ def _load_local_dotenv() -> None:
 
             key = key.strip()
             value = value.strip()
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
                 value = value[1:-1]
 
             if key:
@@ -74,7 +74,10 @@ def _single_line(value: Any) -> str:
 
 
 def log_start(task: str, env: str, model: str) -> None:
-    print(f"[START] task={_single_line(task)} env={_single_line(env)} model={_single_line(model)}", flush=True)
+    print(
+        f"[START] task={_single_line(task)} env={_single_line(env)} model={_single_line(model)}",
+        flush=True,
+    )
 
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
@@ -100,9 +103,7 @@ def _tools_to_openai_format(tools: list[Any]) -> list[dict[str, Any]]:
         properties: dict[str, Any] = {}
         required: list[str] = []
         input_schema = (
-            getattr(tool, "input_schema", None)
-            or getattr(tool, "inputSchema", None)
-            or {}
+            getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None) or {}
         )
         if input_schema and "properties" in input_schema:
             for name, schema in input_schema["properties"].items():
@@ -167,7 +168,7 @@ async def run_episode(
     env: QEDMathEnv,
     client: OpenAI,
     tools: list[dict[str, Any]],
- ) -> tuple[bool, int, list[float]]:
+) -> tuple[bool, int, list[float]]:
     tool_names = {tool["function"]["name"] for tool in tools}
 
     await env.reset()
@@ -248,10 +249,7 @@ async def run_episode(
 
 async def async_main() -> None:
     if not HF_TOKEN:
-        raise SystemExit(
-            "HF_TOKEN must be set.\n"
-            "Optional fallback: API_KEY."
-        )
+        raise SystemExit("HF_TOKEN must be set.\nOptional fallback: API_KEY.")
 
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 

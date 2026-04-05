@@ -12,7 +12,6 @@ parsed and the integer score is normalized to a reward. Optional
 
 from __future__ import annotations
 
-
 import asyncio
 import re
 import time
@@ -20,7 +19,6 @@ from dataclasses import dataclass, field
 from typing import Any, Union
 
 import openai
-
 from openenv.core.rubrics.base import Rubric
 
 
@@ -46,9 +44,7 @@ def parse_schema(schema: Any) -> str:
             raise ValueError(
                 f"Schema entry at index {idx} is missing 'title', 'points', or 'desc'/'description'"
             )
-        sections.append(
-            f"# {title} ({points} points)\nDescription: {description}".strip()
-        )
+        sections.append(f"# {title} ({points} points)\nDescription: {description}".strip())
 
     return "\n\n".join(sections)
 
@@ -121,15 +117,13 @@ class MathProofRubric(Rubric):
             client_kwargs["api_key"] = api_key
         self._client = openai.AsyncOpenAI(**client_kwargs)
 
-    async def forward(self, action: Any, observation: Any) -> float: # type: ignore
+    async def forward(self, action: Any, observation: Any) -> float:  # type: ignore
         """Evaluate a proof submission and return the normalized reward."""
         proof = getattr(action, "proof", str(action))
         problem = getattr(observation, "problem", "")
         reference_solution = getattr(observation, "reference_solution", "")
         grading_guidelines = getattr(observation, "grading_guidelines", "")
-        result = await self.grade(
-            proof, problem, reference_solution, grading_guidelines
-        )
+        result = await self.grade(proof, problem, reference_solution, grading_guidelines)
         return result.reward
 
     async def grade(
@@ -188,9 +182,7 @@ class MathProofRubric(Rubric):
                 metrics["verifier/runtime/latency_per_request"] = round(elapsed, 4)
                 metrics["verifier/failures/num_retries"] = attempt - 1
                 metrics["verifier/runtime/input_tokens"] = max(1, len(prompt) // 4)
-                metrics["verifier/runtime/output_tokens"] = max(
-                    1, len(response_text) // 4
-                )
+                metrics["verifier/runtime/output_tokens"] = max(1, len(response_text) // 4)
 
                 if not re.search(r"<score>\d+</score>", response_text):
                     metrics["verifier/failures/no_score_tag"] = 1
@@ -232,8 +224,7 @@ class MathProofRubric(Rubric):
         return GradingResult(
             score=0,
             feedback=(
-                f"Grading failed after {self.max_retries} attempt(s): "
-                + "; ".join(attempt_causes)
+                f"Grading failed after {self.max_retries} attempt(s): " + "; ".join(attempt_causes)
             ),
             reward=0.0,
             metrics=metrics,
@@ -241,11 +232,7 @@ class MathProofRubric(Rubric):
 
     def normalize_reward(self, score: int) -> float:
         """Normalize a 0-7 score to a [0, 1] reward."""
-        effective = (
-            apply_score_threshold(float(score))
-            if self.custom_threshold
-            else float(score)
-        )
+        effective = apply_score_threshold(float(score)) if self.custom_threshold else float(score)
         return effective / MAX_SCORE
 
     def _build_prompt(
@@ -256,9 +243,7 @@ class MathProofRubric(Rubric):
         grading_guidelines: str,
     ) -> str:
         """Format the evaluator prompt template with grading variables."""
-        if self.prompt_template and any(
-            v in self.prompt_template for v in _TEMPLATE_VARS
-        ):
+        if self.prompt_template and any(v in self.prompt_template for v in _TEMPLATE_VARS):
             return self.prompt_template.format(
                 problem=problem,
                 human_solution=reference_solution,
