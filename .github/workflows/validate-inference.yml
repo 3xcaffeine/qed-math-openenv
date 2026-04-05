@@ -11,12 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      JUDGE_API_BASE_URL: ${{ vars.JUDGE_API_BASE_URL || 'https://router.huggingface.co/v1' }}
-      JUDGE_MODEL: ${{ vars.JUDGE_MODEL || 'openai/gpt-oss-120b:novita' }}
-      JUDGE_API_KEY: ${{ secrets.JUDGE_API_KEY }}
+ 
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      QED_MATH_URL: "http://localhost:8000"
-      MAX_STEPS: "4"
+      QED_MATH_URL: ${{ secrets.QED_MATH_URL }}
+      MAX_STEPS: "8"
 
     steps:
       - name: Checkout repository
