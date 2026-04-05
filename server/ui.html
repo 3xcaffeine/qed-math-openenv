@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QED Math Environment</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .obs-box { font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-word; }
+    .score-bar { transition: width 0.4s ease; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+      <span class="font-semibold text-gray-800">QED Math Environment</span>
+    </div>
+    <span id="header-status" class="text-sm text-gray-500">Connecting…</span>
+  </header>
+
+  <!-- Main grid -->
+  <div class="grid grid-cols-2 gap-0 h-[calc(100vh-53px)]">
+
+    <!-- LEFT PANEL -->
+    <div class="border-r border-gray-200 bg-white flex flex-col overflow-y-auto p-6 gap-5">
+
+      <!-- Current Problem -->
+      <section>
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Current Problem</h2>
+        <div id="problem-box"
+          class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-700 min-h-[96px] leading-relaxed">
+          <span class="text-gray-400 italic">No problem loaded. Click Reset or Get Problem.</span>
+        </div>
+      </section>
+
+      <!-- Proof Textarea -->
+      <section>
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Your Proof</h2>
+        <textarea id="proof-input"
+          class="w-full border border-gray-200 rounded-lg p-3 text-sm text-gray-800 resize-y min-h-[140px] focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="Write your proof here…"></textarea>
+      </section>
+
+      <!-- Action Buttons -->
+      <section class="flex flex-wrap gap-2">
+        <button onclick="doReset()"
+          class="px-4 py-2 text-sm font-medium rounded-md bg-gray-800 text-white hover:bg-gray-700 active:scale-95 transition">
+          Reset Environment
+        </button>
+        <button onclick="doGetProblem()"
+          class="px-4 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 active:scale-95 transition">
+          Get Problem
+        </button>
+        <button onclick="doGetGuidelines()"
+          class="px-4 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 active:scale-95 transition">
+          Get Guidelines
+        </button>
+        <button onclick="doSubmitProof()"
+          class="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 active:scale-95 transition">
+          Submit Proof
+        </button>
+      </section>
+
+      <!-- Last Submission Result -->
+      <section id="submission-result" class="hidden">
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Last Submission</h2>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
+          <!-- Score bar -->
+          <div>
+            <div class="flex justify-between text-xs text-gray-500 mb-1">
+              <span>Score</span>
+              <span id="score-label">—</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2">
+              <div id="score-bar" class="score-bar h-2 rounded-full bg-blue-500 w-0"></div>
+            </div>
+          </div>
+          <!-- Reward / correct badge -->
+          <div class="flex items-center gap-3 text-sm">
+            <span class="text-gray-500">Reward:</span>
+            <span id="reward-label" class="font-mono font-semibold text-gray-800">—</span>
+            <span id="correct-badge" class="hidden px-2 py-0.5 text-xs rounded-full font-medium"></span>
+          </div>
+          <!-- Feedback -->
+          <div>
+            <p class="text-xs text-gray-500 mb-1">Feedback</p>
+            <p id="feedback-text" class="text-sm text-gray-700 leading-relaxed"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Current State -->
+      <section>
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Current State</h2>
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-1.5 text-sm">
+          <div class="flex gap-2">
+            <span class="text-gray-500 w-24 shrink-0">Status</span>
+            <span id="state-status" class="font-medium text-gray-800">—</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="text-gray-500 w-24 shrink-0">Episode ID</span>
+            <span id="state-episode" class="font-mono text-gray-600 truncate">—</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="text-gray-500 w-24 shrink-0">Step Count</span>
+            <span id="state-steps" class="font-medium text-gray-800">0</span>
+          </div>
+          <div class="flex gap-2">
+            <span class="text-gray-500 w-24 shrink-0">Attempt</span>
+            <span id="state-attempt" class="font-medium text-gray-800">—</span>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /LEFT PANEL -->
+
+    <!-- RIGHT PANEL -->
+    <div class="bg-white flex flex-col overflow-y-auto p-6 gap-5">
+
+      <h2 class="text-base font-semibold text-gray-800">State Observer</h2>
+
+      <!-- Current Observation -->
+      <section>
+        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Current Observation</h3>
+        <div id="obs-box"
+          class="obs-box bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-700 max-h-72 overflow-y-auto">
+          <span class="text-gray-400 italic">Awaiting first action…</span>
+        </div>
+      </section>
+
+      <!-- Action History -->
+      <section class="flex-1">
+        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Action History</h3>
+        <div id="history-list" class="space-y-2">
+          <p class="text-sm text-gray-400 italic">No actions taken yet.</p>
+        </div>
+      </section>
+
+    </div><!-- /RIGHT PANEL -->
+
+  </div><!-- /grid -->
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────────
+  let _busy = false;
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function ts() {
+    const d = new Date();
+    return d.toTimeString().slice(0, 8);
+  }
+
+  function setConnected(ok) {
+    const dot = document.getElementById('status-dot');
+    const hdr = document.getElementById('header-status');
+    dot.className = `w-2.5 h-2.5 rounded-full ${ok ? 'bg-green-500' : 'bg-red-500'}`;
+    hdr.textContent = ok ? 'Connected' : 'Disconnected';
+  }
+
+  function setBusy(v) {
+    _busy = v;
+    document.querySelectorAll('button').forEach(b => b.disabled = v);
+  }
+
+  async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    if (!res.ok) throw new Error(`${method} ${path} → ${res.status}`);
+    return res.json();
+  }
+
+  function renderObs(data) {
+    document.getElementById('obs-box').textContent = JSON.stringify(data, null, 2);
+  }
+
+  function addHistory(toolName, detail) {
+    const list = document.getElementById('history-list');
+    const placeholder = list.querySelector('p');
+    if (placeholder) placeholder.remove();
+
+    const el = document.createElement('div');
+    el.className = 'bg-gray-50 border border-gray-100 rounded-lg px-4 py-2.5 text-sm';
+    el.innerHTML = `
+      <div class="flex justify-between items-center">
+        <span class="font-medium text-gray-800">${toolName}</span>
+        <span class="text-xs text-gray-400">${ts()}</span>
+      </div>
+      ${detail ? `<p class="text-xs text-gray-500 mt-1">${detail}</p>` : ''}
+    `;
+    list.prepend(el);
+  }
+
+  function updateState(obs) {
+    const meta = obs?.metadata ?? {};
+    document.getElementById('state-status').textContent =
+      meta.status ?? (obs?.done ? 'Done' : 'Ready');
+    if (obs?.episode_id)
+      document.getElementById('state-episode').textContent = obs.episode_id;
+    if (meta.step_count !== undefined)
+      document.getElementById('state-steps').textContent = meta.step_count;
+    if (meta.attempt_count !== undefined)
+      document.getElementById('state-attempt').textContent = meta.attempt_count;
+  }
+
+  function showProblem(obs) {
+    const problem = obs?.problem ?? obs?.result?.problem ?? '';
+    if (problem) {
+      document.getElementById('problem-box').textContent = problem;
+    }
+  }
+
+  function showSubmission(result) {
+    const sec = document.getElementById('submission-result');
+    sec.classList.remove('hidden');
+
+    const score = result?.score ?? 0;
+    const maxScore = 7;
+    const reward = result?.reward ?? 0;
+    const feedback = result?.feedback ?? '';
+    const isCorrect = result?.is_correct ?? false;
+
+    document.getElementById('score-label').textContent = `${score} / ${maxScore}`;
+    document.getElementById('score-bar').style.width = `${(score / maxScore) * 100}%`;
+    document.getElementById('score-bar').className =
+      `score-bar h-2 rounded-full w-0 ${score >= 6 ? 'bg-green-500' : score >= 3 ? 'bg-yellow-500' : 'bg-red-400'}`;
+
+    document.getElementById('reward-label').textContent = reward.toFixed(3);
+
+    const badge = document.getElementById('correct-badge');
+    badge.classList.remove('hidden');
+    if (isCorrect) {
+      badge.textContent = 'Correct';
+      badge.className = 'px-2 py-0.5 text-xs rounded-full font-medium bg-green-100 text-green-700';
+    } else {
+      badge.textContent = 'Incorrect';
+      badge.className = 'px-2 py-0.5 text-xs rounded-full font-medium bg-red-100 text-red-700';
+    }
+
+    document.getElementById('feedback-text').textContent = feedback;
+  }
+
+  // ── Poll /state ─────────────────────────────────────────────────────────────
+  async function pollState() {
+    try {
+      const state = await api('GET', '/state');
+      if (state.episode_id)
+        document.getElementById('state-episode').textContent = state.episode_id;
+      document.getElementById('state-steps').textContent = state.step_count ?? 0;
+      setConnected(true);
+    } catch {
+      setConnected(false);
+    }
+  }
+  setInterval(pollState, 2000);
+
+  // ── Actions ─────────────────────────────────────────────────────────────────
+  async function doReset() {
+    if (_busy) return;
+    setBusy(true);
+    try {
+      const data = await api('POST', '/reset', {});
+      const obs = data.observation ?? data;
+      renderObs(obs);
+      showProblem(obs);
+      updateState(obs);
+      document.getElementById('submission-result').classList.add('hidden');
+      document.getElementById('proof-input').value = '';
+      document.getElementById('state-status').textContent = 'Reset';
+      addHistory('reset', `Episode ${obs?.metadata?.reset_count ?? ''}`);
+      setConnected(true);
+    } catch (e) {
+      addHistory('reset', `Error: ${e.message}`);
+      setConnected(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doStep(toolName, args, historyDetail) {
+    if (_busy) return;
+    setBusy(true);
+    try {
+      const data = await api('POST', '/step', {
+        action: { type: 'call_tool', tool_name: toolName, arguments: args ?? {} }
+      });
+      const obs = data.observation ?? data;
+      renderObs(obs);
+      updateState(obs);
+
+      // Extract nested result
+      const result = obs?.result ?? obs?.proof_submission ?? obs;
+      if (toolName === 'submit_proof') {
+        showSubmission(result);
+      } else if (toolName === 'get_problem') {
+        showProblem(result);
+      } else if (toolName === 'get_grading_guidelines') {
+        const guidelines = result?.grading_guidelines ?? result?.guidelines ?? JSON.stringify(result);
+        document.getElementById('problem-box').textContent = guidelines;
+      }
+
+      addHistory(toolName, historyDetail ?? null);
+      setConnected(true);
+    } catch (e) {
+      addHistory(toolName, `Error: ${e.message}`);
+      setConnected(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function doGetProblem() { doStep('get_problem', {}); }
+  function doGetGuidelines() { doStep('get_grading_guidelines', {}); }
+  function doSubmitProof() {
+    const proof = document.getElementById('proof-input').value.trim();
+    doStep('submit_proof', { proof }, proof ? `${proof.length} chars` : 'empty proof');
+  }
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+  doReset();
+</script>
+</body>
+</html>

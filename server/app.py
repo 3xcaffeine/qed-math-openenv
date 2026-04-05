@@ -12,6 +12,9 @@ Usage:
     uv run --project . server
 """
 
+from pathlib import Path
+
+from fastapi.responses import HTMLResponse
 from openenv.core.env_server import create_app
 from openenv.core.env_server.mcp_types import CallToolAction, CallToolObservation
 
@@ -23,6 +26,12 @@ app = create_app(
     CallToolObservation,
     env_name="qed_math_env",
 )
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def ui() -> HTMLResponse:
+    """Browser UI for interacting with the QED Math environment."""
+    return HTMLResponse((Path(__file__).parent / "ui.html").read_text())
 
 
 @app.get("/healthz")
