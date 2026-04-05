@@ -16,6 +16,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Warn on files over 10MB
-        uses: ActionsDesk/lfs-warning@v2.0
-        with:
-          filesizelimit: 10485760
+        run: |
+          found=0
+          while IFS= read -r -d '' file; do
+            size=$(stat -c%s "$file")
+            echo "::warning file=$file::File exceeds 10MB limit (${size} bytes) — consider using Git LFS"
+            found=1
+          done < <(find . -not -path './.git/*' -type f -size +10M -print0)
+          if [ "$found" -eq 0 ]; then
+            echo "No files over 10MB found."
+          fi
