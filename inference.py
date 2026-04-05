@@ -9,6 +9,8 @@ import asyncio
 import json
 import os
 import re
+import sys
+import traceback
 from pathlib import Path
 from typing import Any, Optional, cast
 
@@ -53,7 +55,10 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "openai/gpt-oss-120b:novita")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 
-QED_MATH_URL = os.getenv("QED_MATH_URL", "http://localhost:8000")
+_raw_qed_math_url = os.getenv("QED_MATH_URL")
+QED_MATH_URL = (
+    _raw_qed_math_url.strip() if _raw_qed_math_url is not None else "http://localhost:8000"
+)
 TASK_NAME = os.getenv("TASK_NAME", "solve-qed-math")
 BENCHMARK = os.getenv("BENCHMARK", "qed-math")
 
@@ -250,6 +255,8 @@ async def run_episode(
 async def async_main() -> None:
     if not HF_TOKEN:
         raise SystemExit("HF_TOKEN must be set.\nOptional fallback: API_KEY.")
+    if not QED_MATH_URL:
+        raise SystemExit("QED_MATH_URL must be set (for example: https://<space>.hf.space/).")
 
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
@@ -274,6 +281,17 @@ async def async_main() -> None:
     except Exception as exc:
         caught_error = exc
         success = False
+        print(
+            f"[ERROR] type={type(exc).__name__} message={exc}",
+            file=sys.stderr,
+            flush=True,
+        )
+        print(
+            f"[ERROR] QED_MATH_URL={QED_MATH_URL}",
+            file=sys.stderr,
+            flush=True,
+        )
+        traceback.print_exc(file=sys.stderr)
     finally:
         log_end(success=success, steps=steps_taken, rewards=rewards)
 

@@ -13,7 +13,7 @@ jobs:
     env:
  
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
-      QED_MATH_URL: ${{ secrets.QED_MATH_URL }}
+      QED_MATH_URL: ${{ vars.QED_MATH_URL }}
       MAX_STEPS: "8"
 
     steps:
@@ -31,25 +31,39 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Start server
-        run: uv run uvicorn server.app:app --host 0.0.0.0 --port 8000 &
-
-      - name: Wait for server to be healthy
+      - name: Validate CI variables
+        shell: bash
         run: |
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8000/healthz; then
-              echo "Server is healthy"
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN is empty or undefined. Configure repository secret HF_TOKEN."
+            exit 1
+          fi
+          if [ -z "${QED_MATH_URL}" ]; then
+            echo "::error::QED_MATH_URL is empty or undefined. Configure repository variable QED_MATH_URL."
+            exit 1
+          fi
+          echo "QED_MATH_URL=${QED_MATH_URL}"
+
+      - name: Verify QED Math endpoint
+        shell: bash
+        run: |
+          BASE_URL="${QED_MATH_URL%/}"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              -H "Content-Type: application/json" -d '{}' \
+              "${BASE_URL}/reset" || echo "000")
+
+            if [ "${code}" = "200" ]; then
+              echo "Endpoint is reachable at ${BASE_URL}/reset"
               exit 0
             fi
-            echo "Attempt $i/30 — waiting..."
-            sleep 2
+
+            echo "Attempt ${attempt}/5: ${BASE_URL}/reset returned HTTP ${code}; retrying..."
+            sleep 6
           done
-          echo "::error::Server did not become healthy in time"
+
+          echo "::error::Unable to reach ${BASE_URL}/reset after retries. Check URL and Space status."
           exit 1
 
       - name: Run inference
         run: uv run python inference.py
-
-      - name: Stop server
-        if: always()
-        run: pkill -f "uvicorn server.app:app" || true
