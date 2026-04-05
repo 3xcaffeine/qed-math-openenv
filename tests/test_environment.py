@@ -27,7 +27,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # Path setup — ensure repository root is importable
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -52,9 +51,16 @@ pytest.importorskip("math_verify", reason="math_verify is not installed")
 pytest.importorskip("fastmcp", reason="fastmcp is not installed")
 
 from openenv.core.env_server.mcp_environment import get_server_tools  # noqa: E402
+
 from models import (  # noqa: E402
     ProblemObservation,
     ProofSubmissionObservation,
+)
+from server.math_verify_service import (  # noqa: E402
+    MathVerifierService,
+    VerifyRequest,
+    VerifyResponse,
+    _verify_answer_worker,
 )
 from server.qed_math_environment import (  # noqa: E402
     QEDMathEnvironment,
@@ -63,20 +69,13 @@ from server.qed_math_environment import (  # noqa: E402
     remove_reasoning,
 )
 from server.rubric import (  # noqa: E402
+    MAX_SCORE,
     GradingResult,
     MathProofRubric,
     apply_score_threshold,
     length_penalty,
     parse_schema,
-    MAX_SCORE,
 )
-from server.math_verify_service import (  # noqa: E402
-    MathVerifierService,
-    VerifyRequest,
-    VerifyResponse,
-    _verify_answer_worker,
-)
-
 
 # Helpers
 
@@ -121,9 +120,7 @@ def _make_env(**kwargs) -> QEDMathEnvironment:
 def _make_env_with_problem(raw_problem: dict) -> QEDMathEnvironment:
     """Create an environment pre-loaded with a single synthetic problem."""
     env = _make_env()
-    normalized = _normalize_problem(
-        raw_problem, 0, raw_problem.get("dataset_source", "test")
-    )
+    normalized = _normalize_problem(raw_problem, 0, raw_problem.get("dataset_source", "test"))
     env._problems = [normalized]
     env._gold_cache_problem_count = len(env._problems)
     env._build_gold_answer_cache()
@@ -224,17 +221,13 @@ class TestMathProofRubricNormalizeReward:
         assert rubric.normalize_reward(3) == pytest.approx(3 / 7)
 
     def test_custom_threshold_collapses_partial(self):
-        rubric = MathProofRubric(
-            grader_model="test", api_key="x", custom_threshold=True
-        )
+        rubric = MathProofRubric(grader_model="test", api_key="x", custom_threshold=True)
         # scores 1-5 collapse to 1, normalized to 1/7
         for score in [1, 2, 3, 4, 5]:
             assert rubric.normalize_reward(score) == pytest.approx(1 / 7)
 
     def test_custom_threshold_preserves_high(self):
-        rubric = MathProofRubric(
-            grader_model="test", api_key="x", custom_threshold=True
-        )
+        rubric = MathProofRubric(grader_model="test", api_key="x", custom_threshold=True)
         assert rubric.normalize_reward(6) == pytest.approx(6 / 7)
         assert rubric.normalize_reward(7) == pytest.approx(1.0)
 
@@ -270,9 +263,7 @@ class TestMathProofRubricParseResponse:
 
 class TestMathProofRubricBuildPrompt:
     def _rubric(self, template: str = "") -> MathProofRubric:
-        return MathProofRubric(
-            grader_model="test", api_key="x", prompt_template=template
-        )
+        return MathProofRubric(grader_model="test", api_key="x", prompt_template=template)
 
     def test_fallback_prompt_contains_proof(self):
         rubric = self._rubric()
@@ -300,9 +291,7 @@ class TestMathProofRubricGrade:
     async def test_successful_grade(self):
         rubric = self._rubric()
         response_text = "The proof is correct. <score>7</score>"
-        with patch.object(
-            rubric, "_call_llm", new=AsyncMock(return_value=response_text)
-        ):
+        with patch.object(rubric, "_call_llm", new=AsyncMock(return_value=response_text)):
             result = await rubric.grade("Good proof.", "Problem", "Ref", "Guidelines")
         assert result.score == 7
         assert result.reward == pytest.approx(1.0)
@@ -312,9 +301,7 @@ class TestMathProofRubricGrade:
     async def test_score_normalized(self):
         rubric = self._rubric()
         response_text = "<score>3</score>"
-        with patch.object(
-            rubric, "_call_llm", new=AsyncMock(return_value=response_text)
-        ):
+        with patch.object(rubric, "_call_llm", new=AsyncMock(return_value=response_text)):
             result = await rubric.grade("Partial proof.", "P", "R", "G")
         assert result.score == 3
         assert result.reward == pytest.approx(3 / 7)
@@ -332,9 +319,7 @@ class TestMathProofRubricGrade:
     async def test_missing_score_tag_records_metric(self):
         rubric = self._rubric()
         response_text = "Looks good but I forgot the tag."
-        with patch.object(
-            rubric, "_call_llm", new=AsyncMock(return_value=response_text)
-        ):
+        with patch.object(rubric, "_call_llm", new=AsyncMock(return_value=response_text)):
             result = await rubric.grade("Some proof.", "P", "R", "G")
         assert result.metrics["verifier/failures/no_score_tag"] == 1
         assert result.metrics["verifier/rollouts/failure"] == 1
@@ -348,9 +333,7 @@ class TestMathProofRubricGrade:
             rubric,
             "_call_llm",
             new=AsyncMock(
-                side_effect=_openai.RateLimitError(
-                    "rate", response=MagicMock(), body={}
-                )
+                side_effect=_openai.RateLimitError("rate", response=MagicMock(), body={})
             ),
         ):
             result = await rubric.grade("My proof.", "P", "R", "G")
@@ -363,9 +346,7 @@ class TestMathProofRubricGrade:
     async def test_custom_threshold_applied(self):
         rubric = self._rubric(custom_threshold=True)
         response_text = "<score>4</score>"
-        with patch.object(
-            rubric, "_call_llm", new=AsyncMock(return_value=response_text)
-        ):
+        with patch.object(rubric, "_call_llm", new=AsyncMock(return_value=response_text)):
             result = await rubric.grade("Partial proof.", "P", "R", "G")
         # Score 4 → thresholded to 1 → reward 1/7
         assert result.reward == pytest.approx(1 / 7)
@@ -373,9 +354,7 @@ class TestMathProofRubricGrade:
     @pytest.mark.asyncio
     async def test_verifier_metrics_present(self):
         rubric = self._rubric()
-        with patch.object(
-            rubric, "_call_llm", new=AsyncMock(return_value="<score>5</score>")
-        ):
+        with patch.object(rubric, "_call_llm", new=AsyncMock(return_value="<score>5</score>")):
             result = await rubric.grade("proof", "P", "R", "G")
         expected_keys = [
             "verifier/rollouts/success",
@@ -608,9 +587,7 @@ class TestGradeAnswerSubmission:
     async def test_missing_boxed_gives_zero(self):
         env = _make_env()
         try:
-            result = await env._grade_answer_submission(
-                "The answer is 4.", r"\boxed{4}"
-            )
+            result = await env._grade_answer_submission("The answer is 4.", r"\boxed{4}")
             assert result.score == 0
             assert result.reward == pytest.approx(0.0)
         finally:
@@ -658,9 +635,7 @@ class TestGradeAnswerSubmission:
                 assert result.score == 0
                 assert result.metrics["verifier/failures/timeout"] == 1
                 assert result.metrics["verifier/failures/num_retries"] == 1
-                assert result.metrics[
-                    "verifier/runtime/latency_per_request"
-                ] == pytest.approx(12.5)
+                assert result.metrics["verifier/runtime/latency_per_request"] == pytest.approx(12.5)
                 assert "verifier/workers/restart_count" in result.metrics
                 assert "verifier/workers/worker_restarted" in result.metrics
                 assert "verifier/queue/depth" in result.metrics
@@ -719,9 +694,7 @@ class TestRewardShaping:
     def test_score_thresholding_via_rubric(self):
         env = _make_env()
         # Mimic custom_threshold=True: scores 1-5 → reward = 1/7
-        rubric = MathProofRubric(
-            grader_model="test", api_key="x", custom_threshold=True
-        )
+        rubric = MathProofRubric(grader_model="test", api_key="x", custom_threshold=True)
         env._rubric = rubric
         for score in [1, 2, 3, 4, 5]:
             assert rubric.normalize_reward(score) == pytest.approx(1 / 7)
@@ -787,9 +760,7 @@ class TestSubmitProofPayload:
         env.reset()
 
         mock_result = GradingResult(score=7, feedback="Correct.", reward=1.0)
-        with patch.object(
-            env._rubric, "grade", new=AsyncMock(return_value=mock_result)
-        ):
+        with patch.object(env._rubric, "grade", new=AsyncMock(return_value=mock_result)):
             payload = await env.submit_proof_payload("Let a=2m, b=2n, a+b=2(m+n).")
 
         assert payload["score"] == 7
@@ -811,9 +782,7 @@ class TestSubmitProofPayload:
         env.reset()
 
         mock_result = GradingResult(score=3, feedback="Partial.", reward=3 / 7)
-        with patch.object(
-            env._rubric, "grade", new=AsyncMock(return_value=mock_result)
-        ):
+        with patch.object(env._rubric, "grade", new=AsyncMock(return_value=mock_result)):
             p1 = await env.submit_proof_payload("attempt 1")
             p2 = await env.submit_proof_payload("attempt 2")
 
@@ -838,12 +807,8 @@ class TestSubmitProofPayload:
             "verifier/runtime/input_tokens": 50,
             "verifier/runtime/output_tokens": 20,
         }
-        mock_result = GradingResult(
-            score=6, feedback="Good.", reward=6 / 7, metrics=metrics
-        )
-        with patch.object(
-            env._rubric, "grade", new=AsyncMock(return_value=mock_result)
-        ):
+        mock_result = GradingResult(score=6, feedback="Good.", reward=6 / 7, metrics=metrics)
+        with patch.object(env._rubric, "grade", new=AsyncMock(return_value=mock_result)):
             payload = await env.submit_proof_payload("Good proof here.")
 
         vm = payload["metadata"]["verifier_metrics"]
@@ -864,9 +829,7 @@ class TestMultiStepProblems:
 
         # Score below success threshold → not done yet
         mock_result = GradingResult(score=3, feedback="Keep trying.", reward=3 / 7)
-        with patch.object(
-            env._rubric, "grade", new=AsyncMock(return_value=mock_result)
-        ):
+        with patch.object(env._rubric, "grade", new=AsyncMock(return_value=mock_result)):
             payload = await env.submit_proof_payload("First attempt.")
 
         assert payload["done"] is False
@@ -879,9 +842,7 @@ class TestMultiStepProblems:
 
         mock_result = GradingResult(score=1, feedback="Not enough.", reward=1 / 7)
         # 3 attempts configured
-        with patch.object(
-            env._rubric, "grade", new=AsyncMock(return_value=mock_result)
-        ):
+        with patch.object(env._rubric, "grade", new=AsyncMock(return_value=mock_result)):
             await env.submit_proof_payload("attempt 1")
             await env.submit_proof_payload("attempt 2")
             payload = await env.submit_proof_payload("attempt 3")
@@ -896,9 +857,7 @@ class TestMultiStepProblems:
 
         # Score >= 6 (success_score_threshold default) → done immediately
         mock_result = GradingResult(score=7, feedback="Correct!", reward=1.0)
-        with patch.object(
-            env._rubric, "grade", new=AsyncMock(return_value=mock_result)
-        ):
+        with patch.object(env._rubric, "grade", new=AsyncMock(return_value=mock_result)):
             payload = await env.submit_proof_payload("Full proof.")
 
         assert payload["done"] is True
@@ -1338,9 +1297,7 @@ class TestMathVerifierService:
 
         try:
             with patch.object(service, "_run_request_once", side_effect=crashing_once):
-                with patch.object(
-                    service, "_restart_pool", side_effect=restart_wrapper
-                ):
+                with patch.object(service, "_restart_pool", side_effect=restart_wrapper):
                     response = await service.verify_answer(r"\boxed{4}", "4")
 
             assert response.status == "correct"
@@ -1373,9 +1330,7 @@ class TestMathVerifierService:
             )
 
         try:
-            with patch.object(
-                service, "_run_request_once", side_effect=unparsable_once
-            ):
+            with patch.object(service, "_run_request_once", side_effect=unparsable_once):
                 response = await service.verify_answer("not boxed", "4")
 
             assert response.status == "unparsable"
@@ -1525,7 +1480,5 @@ class TestQEDMathServerIntegration:
 
     def test_submit_proof_tool_returns_observation(self, env):
         env.reset()
-        result = env.call_tool(
-            "submit_proof", proof="Let a=2m and b=2n, so a+b=2(m+n)."
-        )
+        result = env.call_tool("submit_proof", proof="Let a=2m and b=2n, so a+b=2(m+n).")
         assert result is not None

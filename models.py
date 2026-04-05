@@ -8,7 +8,6 @@ and grading.
 from openenv.core.env_server.types import Action, Observation
 from pydantic import Field
 
-
 RewardValue = bool | int | float | None
 
 
@@ -40,9 +39,7 @@ class ProblemObservation(QEDMathObservation):
 
     problem: str = Field(default="", description="The mathematical problem")
     reference_solution: str = Field(default="", description="Ground truth solution")
-    grading_guidelines: str = Field(
-        default="", description="Rubric for grading (0-7 scale)"
-    )
+    grading_guidelines: str = Field(default="", description="Rubric for grading (0-7 scale)")
     problem_id: str = Field(default="", description="Unique problem identifier")
     dataset_source: str = Field(default="", description="Source dataset name")
     problem_type: str = Field(
@@ -70,9 +67,7 @@ class ProofSubmissionObservation(QEDMathObservation):
         default="proof",
         description="Problem type used to evaluate this submission",
     )
-    attempt_number: int = Field(
-        default=1, description="1-based submission attempt index"
-    )
+    attempt_number: int = Field(default=1, description="1-based submission attempt index")
     attempts_remaining: int = Field(
         default=0,
         description="Remaining submission attempts in the current episode",
