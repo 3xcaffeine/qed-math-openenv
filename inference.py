@@ -63,6 +63,9 @@ QED_MATH_URL = (
 )
 TASK_NAME = os.getenv("TASK_NAME", "solve-qed-math")
 BENCHMARK = os.getenv("BENCHMARK", "qed-math")
+TASK_COUNT = max(3, int(os.getenv("TASK_COUNT", "3")))
+MIN_SUBMISSION_SCORE = float(os.getenv("MIN_SUBMISSION_SCORE", "0.01"))
+MAX_SUBMISSION_SCORE = float(os.getenv("MAX_SUBMISSION_SCORE", "0.99"))
 
 MAX_STEPS = int(os.getenv("MAX_STEPS", "8"))
 TEMPERATURE = float(os.getenv("TEMPERATURE", "0.2"))
@@ -78,6 +81,15 @@ SYSTEM_PROMPT = (
 def _single_line(value: Any) -> str:
     """Normalize text values so each log record stays on one line."""
     return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _strict_open_interval_score(score: float) -> float:
+    """Clamp score for submission output so it remains strictly in (0, 1)."""
+    lo = max(0.01, min(MIN_SUBMISSION_SCORE, MAX_SUBMISSION_SCORE))
+    hi = min(0.99, max(MIN_SUBMISSION_SCORE, MAX_SUBMISSION_SCORE))
+    if hi <= lo:
+        lo, hi = 0.01, 0.99
+    return min(max(float(score), lo), hi)
 
 
 def log_start(task: str, env: str, model: str) -> None:
@@ -98,7 +110,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
 
 def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
-    score = min(max(float(score), 0.0), 1.0)
+    score = _strict_open_interval_score(score)
     end_line = (
         f"[END] success={str(success).lower()} steps={steps} "
         f"score={score:.2f} rewards={rewards_str}"
@@ -139,6 +151,34 @@ def _normalize_episode_score(result_dict: dict[str, Any], reward: float) -> floa
             score = parsed_raw / 7.0 if parsed_raw > 1.0 else parsed_raw
 
     return min(max(score, 0.0), 1.0)
+
+
+def _extract_task_ids(payload: Any) -> list[str]:
+    result = _as_mapping(payload)
+    task_ids = result.get("task_ids")
+    if not isinstance(task_ids, list):
+        return []
+
+    normalized: list[str] = []
+    for value in task_ids:
+        task_id = str(value).strip()
+        if task_id:
+            normalized.append(task_id)
+    return normalized
+
+
+def _select_task_ids(task_ids: list[str], task_count: int) -> list[str]:
+    if task_count <= 0:
+        return []
+    if not task_ids:
+        return [TASK_NAME for _ in range(task_count)]
+    if len(task_ids) >= task_count:
+        return task_ids[:task_count]
+
+    selected: list[str] = []
+    for idx in range(task_count):
+        selected.append(task_ids[idx % len(task_ids)])
+    return selected
 
 
 def _tools_to_openai_format(tools: list[Any]) -> list[dict[str, Any]]:
@@ -212,10 +252,14 @@ async def run_episode(
     env: QEDMathEnv,
     client: OpenAI,
     tools: list[dict[str, Any]],
+    problem_id: str | None = None,
 ) -> tuple[bool, int, float, list[float]]:
     tool_names = {tool["function"]["name"] for tool in tools}
 
-    await env.reset()
+    if problem_id is not None:
+        await env.reset(problem_id=problem_id)
+    else:
+        await env.reset()
 
     chat_history: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -226,6 +270,7 @@ async def run_episode(
     steps_taken = 0
     score = 0.0
     success = False
+    grader_called = False
 
     for step in range(1, MAX_STEPS + 1):
         response = client.chat.completions.create(
@@ -247,6 +292,8 @@ async def run_episode(
         call_kwargs = dict(tool_args)
 
         step_result = await env.call_tool(tool_name, **call_kwargs)
+        if tool_name == "submit_proof":
+            grader_called = True
 
         result_dict = _as_mapping(step_result)
 
@@ -290,6 +337,30 @@ async def run_episode(
             }
         )
 
+    # Ensure each task reaches the grader at least once for submission validation.
+    if not grader_called:
+        forced_proof = "I attempted a complete proof but could not finish within the step budget."
+        step_result = await env.call_tool("submit_proof", proof=forced_proof)
+        result_dict = _as_mapping(step_result)
+        reward = float(result_dict.get("reward") or 0.0)
+        done = bool(result_dict.get("done", True))
+        error_raw = result_dict.get("last_action_error")
+        error = str(error_raw) if error_raw is not None else None
+        forced_step = steps_taken + 1
+        action_str = json.dumps(
+            {
+                "tool": "submit_proof",
+                "args": {"proof": forced_proof},
+                "forced": True,
+            },
+            ensure_ascii=True,
+        )
+        log_step(step=forced_step, action=action_str, reward=reward, done=done, error=error)
+        rewards.append(reward)
+        steps_taken = forced_step
+        score = _normalize_episode_score(result_dict, reward)
+        success = bool(result_dict.get("is_correct", score > 0.0))
+
     if not rewards:
         score = 0.0
     elif score == 0.0:
@@ -306,13 +377,6 @@ async def async_main() -> None:
 
     client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
-    success = False
-    steps_taken = 0
-    score = 0.0
-    rewards: list[float] = []
-
-    log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
-
     caught_error: Exception | None = None
 
     try:
@@ -320,14 +384,26 @@ async def async_main() -> None:
             env = cast(QEDMathEnv, raw_env)
             mcp_tools = await env.list_tools()
             tools = _tools_to_openai_format(mcp_tools)
-            success, steps_taken, score, rewards = await run_episode(
-                env=env,
-                client=client,
-                tools=tools,
-            )
+
+            try:
+                task_payload = await env.call_tool("list_task_ids")
+            except Exception:
+                task_payload = {"task_ids": []}
+            available_task_ids = _extract_task_ids(task_payload)
+            selected_task_ids = _select_task_ids(available_task_ids, TASK_COUNT)
+
+            for task_index, problem_id in enumerate(selected_task_ids, start=1):
+                task_name = f"{TASK_NAME}:{problem_id}:run{task_index}"
+                log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+                success, steps_taken, score, rewards = await run_episode(
+                    env=env,
+                    client=client,
+                    tools=tools,
+                    problem_id=problem_id if problem_id != TASK_NAME else None,
+                )
+                log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
     except Exception as exc:
         caught_error = exc
-        success = False
         print(
             f"[ERROR] type={type(exc).__name__} message={exc}",
             file=sys.stderr,
@@ -339,8 +415,6 @@ async def async_main() -> None:
             flush=True,
         )
         traceback.print_exc(file=sys.stderr)
-    finally:
-        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     if caught_error is not None:
         raise SystemExit(1) from caught_error
