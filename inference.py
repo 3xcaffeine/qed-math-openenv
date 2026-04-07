@@ -57,7 +57,9 @@ HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY")
 
 _raw_qed_math_url = os.getenv("QED_MATH_URL")
 QED_MATH_URL = (
-    _raw_qed_math_url.strip() if _raw_qed_math_url is not None else "http://localhost:8000"
+    _raw_qed_math_url.strip()
+    if _raw_qed_math_url is not None
+    else "https://rycerzes-qed-math-openenv.hf.space"
 )
 TASK_NAME = os.getenv("TASK_NAME", "solve-qed-math")
 BENCHMARK = os.getenv("BENCHMARK", "qed-math")
@@ -94,12 +96,49 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, rewards: list[float]) -> None:
+def log_end(success: bool, steps: int, score: float, rewards: list[float]) -> None:
     rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+    score = min(max(float(score), 0.0), 1.0)
+    end_line = (
+        f"[END] success={str(success).lower()} steps={steps} "
+        f"score={score:.2f} rewards={rewards_str}"
+    )
     print(
-        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
+        end_line,
         flush=True,
     )
+
+
+def _coerce_float(value: object) -> float | None:
+    """Best-effort float coercion that never raises."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    return None
+
+
+def _normalize_episode_score(result_dict: dict[str, Any], reward: float) -> float:
+    """Return a score in [0, 1] from tool payload fields."""
+    score = _coerce_float(result_dict.get("reward"))
+    if score is None:
+        parsed_raw = _coerce_float(result_dict.get("score"))
+        if parsed_raw is None:
+            score = reward
+        else:
+            score = parsed_raw / 7.0 if parsed_raw > 1.0 else parsed_raw
+
+    return min(max(score, 0.0), 1.0)
 
 
 def _tools_to_openai_format(tools: list[Any]) -> list[dict[str, Any]]:
@@ -173,7 +212,7 @@ async def run_episode(
     env: QEDMathEnv,
     client: OpenAI,
     tools: list[dict[str, Any]],
-) -> tuple[bool, int, list[float]]:
+) -> tuple[bool, int, float, list[float]]:
     tool_names = {tool["function"]["name"] for tool in tools}
 
     await env.reset()
@@ -185,6 +224,7 @@ async def run_episode(
 
     rewards: list[float] = []
     steps_taken = 0
+    score = 0.0
     success = False
 
     for step in range(1, MAX_STEPS + 1):
@@ -222,7 +262,8 @@ async def run_episode(
         steps_taken = step
 
         if done:
-            success = bool(result_dict.get("is_correct", reward > 0.0))
+            score = _normalize_episode_score(result_dict, reward)
+            success = bool(result_dict.get("is_correct", score > 0.0))
             break
 
         chat_history.append(
@@ -249,7 +290,12 @@ async def run_episode(
             }
         )
 
-    return success, steps_taken, rewards
+    if not rewards:
+        score = 0.0
+    elif score == 0.0:
+        score = min(max(float(rewards[-1]), 0.0), 1.0)
+
+    return success, steps_taken, score, rewards
 
 
 async def async_main() -> None:
@@ -262,6 +308,7 @@ async def async_main() -> None:
 
     success = False
     steps_taken = 0
+    score = 0.0
     rewards: list[float] = []
 
     log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
@@ -273,7 +320,7 @@ async def async_main() -> None:
             env = cast(QEDMathEnv, raw_env)
             mcp_tools = await env.list_tools()
             tools = _tools_to_openai_format(mcp_tools)
-            success, steps_taken, rewards = await run_episode(
+            success, steps_taken, score, rewards = await run_episode(
                 env=env,
                 client=client,
                 tools=tools,
@@ -293,7 +340,7 @@ async def async_main() -> None:
         )
         traceback.print_exc(file=sys.stderr)
     finally:
-        log_end(success=success, steps=steps_taken, rewards=rewards)
+        log_end(success=success, steps=steps_taken, score=score, rewards=rewards)
 
     if caught_error is not None:
         raise SystemExit(1) from caught_error
